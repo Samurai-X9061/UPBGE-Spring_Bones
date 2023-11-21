@@ -865,7 +865,7 @@ def update_bone(self, context):
                     o.empty_display_size = empty_radius
                     o.empty_display_type = 'PLAIN_AXES'   
                     o.location = bone_tail if rotation_enabled else bone_head                
-                    #o.hide_set(True)
+                    o.hide_set(True)
                     o.hide_select = True
                     
                 if not bpy.data.objects.get(item.name + '_spring_tail'):
