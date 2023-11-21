@@ -769,7 +769,11 @@ def project_point_onto_tri(TRI, P):
 def update_bone(self, context):
     print("Updating data...")
     time_start = time.time()
-    scene = bpy.context.scene    
+    scene = bpy.context.scene   
+    if bpy.context.mode == 'POSE':
+        bpy.context.scene.armatr = bpy.context.active_object
+    elif bpy.context.scene.armatr is None:
+        print("Armature Object is not selected")
     armature = bpy.context.scene.armatr  
     deps = bpy.context.evaluated_depsgraph_get()
     #update collection
@@ -787,132 +791,132 @@ def update_bone(self, context):
             scene.sb_mesh_colliders.remove(i)
             i -= 1
             
-        
-    for pbone in armature.pose.bones:
-        # are the properties there?
-        if len(pbone.keys()) == 0:           
-            continue            
-        if not 'sb_bone_spring' in pbone.keys() and not 'sb_bone_collider' in pbone.keys():
-            continue
+    if armature is not None:    
+        for pbone in armature.pose.bones:
+            # are the properties there?
+            if len(pbone.keys()) == 0:           
+                continue            
+            if not 'sb_bone_spring' in pbone.keys() and not 'sb_bone_collider' in pbone.keys():
+                continue
+                
+            is_spring_bone = False
+            is_collider_bone = False
+            rotation_enabled =  False
+            is_colliding = True
             
-        is_spring_bone = False
-        is_collider_bone = False
-        rotation_enabled =  False
-        is_colliding = True
-        
-        if 'sb_bone_spring' in pbone.keys():
-            if pbone.get("sb_bone_spring") == False:
-                # remove old spring constraints
-                spring_cns = pbone.constraints.get("spring")
-                if spring_cns:
-                    pbone.constraints.remove(spring_cns)   
-                
-            else:
-                is_spring_bone = True
-                
-        if 'sb_bone_collider' in pbone.keys():        
-            is_collider_bone = pbone.get("sb_bone_collider")
-                
-        if 'sb_bone_rot' in pbone.keys():           
-            rotation_enabled = pbone.get("sb_bone_rot") 
-        if 'sb_collide' in pbone.keys():
-            is_colliding = pbone.get('sb_collide')
-            
-        #print("iterating on", pbone.name)
-        if is_spring_bone or is_collider_bone:
-            item = bpy.context.scene.sb_spring_bones.add()
-            item.name = pbone.name    
-            print("registering", pbone.name)
-            bone_tail = armature.matrix_world @ pbone.tail 
-            bone_head = armature.matrix_world @ pbone.head 
-            item.last_loc = bone_head
-            item.armature = armature.name
-            parent_name = ""
-            if pbone.parent:
-                parent_name = pbone.parent.name          
-            
-            item.sb_bone_rot = rotation_enabled
-            item.sb_bone_collider = is_collider_bone
-            item.sb_bone_colliding = is_colliding
-       
-        #create empty helpers
-        empty_radius = 1
-        if is_spring_bone :
-            if not bpy.data.objects.get(item.name + '_spring'):
-                """
-                # adding empties using operators cost too much performance
-                bpy.ops.object.mode_set(mode='OBJECT')       
-                bpy.ops.object.select_all(action='DESELECT')
-                if rotation_enabled:
-                    bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_tail, rotation=(0,0,0)) 
+            if 'sb_bone_spring' in pbone.keys():
+                if pbone.get("sb_bone_spring") == False:
+                    # remove old spring constraints
+                    spring_cns = pbone.constraints.get("spring")
+                    if spring_cns:
+                        pbone.constraints.remove(spring_cns)   
+                    
                 else:
-                    bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_head, rotation=(0,0,0)) 
-                empty = bpy.context.active_object   
-                empty.hide_set(True)
-                empty.hide_select = True
-                empty.name = item.name + '_spring'
-                """
-                o = bpy.data.objects.new(item.name+'_spring', None )
-
-                # due to the new mechanism of "collection"
-                bpy.context.scene.collection.objects.link(o)
-
-                # empty_draw was replaced by empty_display
-                o.empty_display_size = empty_radius
-                o.empty_display_type = 'PLAIN_AXES'   
-                o.location = bone_tail if rotation_enabled else bone_head                
-                #o.hide_set(True)
-                o.hide_select = True
+                    is_spring_bone = True
+                    
+            if 'sb_bone_collider' in pbone.keys():        
+                is_collider_bone = pbone.get("sb_bone_collider")
+                    
+            if 'sb_bone_rot' in pbone.keys():           
+                rotation_enabled = pbone.get("sb_bone_rot") 
+            if 'sb_collide' in pbone.keys():
+                is_colliding = pbone.get('sb_collide')
                 
-            if not bpy.data.objects.get(item.name + '_spring_tail'):
-                empty = bpy.data.objects.new(item.name+'_spring_tail', None )
+            #print("iterating on", pbone.name)
+            if is_spring_bone or is_collider_bone:
+                item = bpy.context.scene.sb_spring_bones.add()
+                item.name = pbone.name    
+                print("registering", pbone.name)
+                bone_tail = armature.matrix_world @ pbone.tail 
+                bone_head = armature.matrix_world @ pbone.head 
+                item.last_loc = bone_head
+                item.armature = armature.name
+                parent_name = ""
+                if pbone.parent:
+                    parent_name = pbone.parent.name          
                 
-                # due to the new mechanism of "collection"
-                bpy.context.scene.collection.objects.link(empty)
-
-                # empty_draw was replaced by empty_display
-                empty.empty_display_size = empty_radius
-                empty.empty_display_type = 'PLAIN_AXES'   
-                #empty.location = bone_tail if rotation_enabled else bone_head
-                empty.matrix_world = Matrix.Translation(bone_tail if rotation_enabled else bone_head)
-                # >>setting the matrix instead of location attribute to avoid the despgraph update
-                # for performance reasons
-                #deps.update()
-                #empty.hide_set(True)
-                empty.hide_select = True
-                """
-                bpy.ops.object.mode_set(mode='OBJECT')        
-                bpy.ops.object.select_all(action='DESELECT')         
-                if rotation_enabled:
-                    bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_tail, rotation=(0,0,0)) 
-                else:
-                    bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_head, rotation=(0,0,0)) 
-                empty = bpy.context.active_object    
-                empty.hide_set(True)
-                empty.hide_select = True
-                                               
-                empty.name = item.name + '_spring_tail'   
-                """
-                mat = empty.matrix_world.copy()                                  
-                empty.parent = armature
-                empty.parent_type = 'BONE'
-                empty.parent_bone = parent_name
-                empty.matrix_world = mat
-                
-            #create constraints
-            if pbone['sb_bone_spring'] == True:
-                #set_active_object(armature.name)
-                #bpy.ops.object.mode_set(mode='POSE')
-                spring_cns = pbone.constraints.get("spring")
-                if spring_cns:
-                    pbone.constraints.remove(spring_cns)                
-                if pbone.sb_bone_rot:
-                    cns = pbone.constraints.new('DAMPED_TRACK')
-                    cns.target = bpy.data.objects[item.name + '_spring']
-                else:
-                    cns = pbone.constraints.new('COPY_LOCATION')
-                    cns.target = bpy.data.objects[item.name + '_spring']                
-                cns.name = 'spring' 
+                item.sb_bone_rot = rotation_enabled
+                item.sb_bone_collider = is_collider_bone
+                item.sb_bone_colliding = is_colliding
+           
+            #create empty helpers
+            empty_radius = 1
+            if is_spring_bone :
+                if not bpy.data.objects.get(item.name + '_spring'):
+                    """
+                    # adding empties using operators cost too much performance
+                    bpy.ops.object.mode_set(mode='OBJECT')       
+                    bpy.ops.object.select_all(action='DESELECT')
+                    if rotation_enabled:
+                        bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_tail, rotation=(0,0,0)) 
+                    else:
+                        bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_head, rotation=(0,0,0)) 
+                    empty = bpy.context.active_object   
+                    empty.hide_set(True)
+                    empty.hide_select = True
+                    empty.name = item.name + '_spring'
+                    """
+                    o = bpy.data.objects.new(item.name+'_spring', None )
+    
+                    # due to the new mechanism of "collection"
+                    bpy.context.scene.collection.objects.link(o)
+    
+                    # empty_draw was replaced by empty_display
+                    o.empty_display_size = empty_radius
+                    o.empty_display_type = 'PLAIN_AXES'   
+                    o.location = bone_tail if rotation_enabled else bone_head                
+                    #o.hide_set(True)
+                    o.hide_select = True
+                    
+                if not bpy.data.objects.get(item.name + '_spring_tail'):
+                    empty = bpy.data.objects.new(item.name+'_spring_tail', None )
+                    
+                    # due to the new mechanism of "collection"
+                    bpy.context.scene.collection.objects.link(empty)
+    
+                    # empty_draw was replaced by empty_display
+                    empty.empty_display_size = empty_radius
+                    empty.empty_display_type = 'PLAIN_AXES'   
+                    #empty.location = bone_tail if rotation_enabled else bone_head
+                    empty.matrix_world = Matrix.Translation(bone_tail if rotation_enabled else bone_head)
+                    # >>setting the matrix instead of location attribute to avoid the despgraph update
+                    # for performance reasons
+                    #deps.update()
+                    #empty.hide_set(True)
+                    empty.hide_select = True
+                    """
+                    bpy.ops.object.mode_set(mode='OBJECT')        
+                    bpy.ops.object.select_all(action='DESELECT')         
+                    if rotation_enabled:
+                        bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_tail, rotation=(0,0,0)) 
+                    else:
+                        bpy.ops.object.empty_add(type='PLAIN_AXES', radius = empty_radius, location=bone_head, rotation=(0,0,0)) 
+                    empty = bpy.context.active_object    
+                    empty.hide_set(True)
+                    empty.hide_select = True
+                                                   
+                    empty.name = item.name + '_spring_tail'   
+                    """
+                    mat = empty.matrix_world.copy()                                  
+                    empty.parent = armature
+                    empty.parent_type = 'BONE'
+                    empty.parent_bone = parent_name
+                    empty.matrix_world = mat
+                    
+                #create constraints
+                if pbone['sb_bone_spring'] == True:
+                    #set_active_object(armature.name)
+                    #bpy.ops.object.mode_set(mode='POSE')
+                    spring_cns = pbone.constraints.get("spring")
+                    if spring_cns:
+                        pbone.constraints.remove(spring_cns)                
+                    if pbone.sb_bone_rot:
+                        cns = pbone.constraints.new('DAMPED_TRACK')
+                        cns.target = bpy.data.objects[item.name + '_spring']
+                    else:
+                        cns = pbone.constraints.new('COPY_LOCATION')
+                        cns.target = bpy.data.objects[item.name + '_spring']                
+                    cns.name = 'spring' 
                       
         
     # mesh colliders
