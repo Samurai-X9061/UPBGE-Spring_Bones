@@ -1,6 +1,6 @@
 # UPBGE-Spring_Bones
 Blender addon to add spring/bouncy dynamic effect to bones.
-made by @artellblender and modifiend by me to add game engine support
+made by @artellblender and modified by me to add game engine support
 
 
 ## Installation
